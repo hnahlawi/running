@@ -1,0 +1,137 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0c0c0c;
+  --surface: #141414;
+  --border: #222;
+  --text: #d8d8d8;
+  --muted: #555;
+  --pace: #5b9cf6;
+  --hr: #f06e6e;
+  --rei: #5ecb7e;
+  --connected: #3a7a52;
+  --connected-text: #5ecb7e;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 28px 32px;
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+h1 {
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #aaa;
+  text-transform: uppercase;
+}
+
+#connections {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.btn:hover { border-color: #444; color: var(--text); }
+
+.btn.connected {
+  border-color: var(--connected);
+  color: var(--connected-text);
+}
+
+.btn.connected:hover { border-color: #4a9a68; }
+
+.btn.disconnect {
+  color: #666;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ── Status bar ── */
+#status-bar {
+  font-size: 12px;
+  color: #c0622a;
+  margin-bottom: 16px;
+  min-height: 18px;
+}
+
+/* ── Charts ── */
+main#charts {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.chart-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chart-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #666;
+}
+
+.chart-label .unit {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #3e3e3e;
+  margin-left: 4px;
+}
+
+canvas {
+  height: 180px !important;
+}
+
+/* ── Empty / loading state ── */
+#empty-state {
+  margin-top: 80px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}

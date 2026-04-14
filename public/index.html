@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Running Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Running Dashboard</h1>
+      <div id="connections"></div>
+    </header>
+
+    <div id="status-bar"></div>
+
+    <main id="charts" hidden>
+      <section class="chart-block">
+        <div class="chart-label">Pace <span class="unit">min / km</span></div>
+        <canvas id="paceChart"></canvas>
+      </section>
+      <section class="chart-block">
+        <div class="chart-label">Heart Rate <span class="unit">bpm avg</span></div>
+        <canvas id="hrChart"></canvas>
+      </section>
+      <section class="chart-block">
+        <div class="chart-label">Running Efficiency Index <span class="unit">m·min⁻¹ / bpm</span></div>
+        <canvas id="reiChart"></canvas>
+      </section>
+    </main>
+
+    <div id="empty-state" hidden>
+      Connect Strava or Fitbit to see your running data.
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
