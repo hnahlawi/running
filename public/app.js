@@ -54,6 +54,62 @@ function dateLabel(iso) {
   return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
 }
 
+// Returns the ISO date string (YYYY-MM-DD) of the Monday that starts the week
+// containing the given ISO date string.
+function weekMonday(iso) {
+  const d = new Date(iso);
+  // getDay(): 0=Sun, 1=Mon…6=Sat — shift so Mon=0
+  const dow = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - dow);
+  return d.toISOString().slice(0, 10);
+}
+
+// Aggregate an array of runs into weekly buckets (Mon–Sun).
+// Returns an array of week objects sorted ascending by Monday date.
+function groupByWeek(runs) {
+  const buckets = new Map();
+
+  for (const r of runs) {
+    const mon = weekMonday(r.date);
+    if (!buckets.has(mon)) {
+      buckets.set(mon, { mon, runs: [] });
+    }
+    buckets.get(mon).runs.push(r);
+  }
+
+  const weeks = [...buckets.values()].sort((a, b) => (a.mon < b.mon ? -1 : 1));
+
+  return weeks.map(w => {
+    const { mon, runs } = w;
+
+    // Pace: distance-weighted (totalDuration / totalDistance)
+    const paceRuns = runs.filter(r => r.distanceKm > 0 && r.durationMin > 0);
+    const totalDist = paceRuns.reduce((s, r) => s + r.distanceKm, 0);
+    const totalDur  = paceRuns.reduce((s, r) => s + r.durationMin, 0);
+    const paceMinPerKm = totalDist > 0 ? totalDur / totalDist : null;
+
+    // HR: simple mean
+    const hrRuns = runs.filter(r => r.avgHr != null);
+    const avgHr = hrRuns.length ? hrRuns.reduce((s, r) => s + r.avgHr, 0) / hrRuns.length : null;
+
+    // REI: simple mean
+    const reiRuns = runs.filter(r => r.rei != null);
+    const rei = reiRuns.length ? reiRuns.reduce((s, r) => s + r.rei, 0) / reiRuns.length : null;
+
+    // Week label: "Mon M/D/YY"
+    const monDate = new Date(mon + 'T00:00:00');
+    const sunDate = new Date(monDate);
+    sunDate.setDate(monDate.getDate() + 6);
+    const fmt = d => `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+    const label = fmt(monDate);
+    const rangeLabel = `${fmt(monDate)} – ${fmt(sunDate)}`;
+
+    const totalKm = runs.reduce((s, r) => s + (r.distanceKm || 0), 0);
+
+    return { mon, label, rangeLabel, paceMinPerKm, avgHr, rei, totalKm, runCount: runs.length };
+  });
+}
+
 // ── Connection buttons + refresh ──────────────────────────────────────────────
 
 function renderConnections(status) {
@@ -117,6 +173,34 @@ function renderConnections(status) {
   }
 }
 
+// ── Week filter ───────────────────────────────────────────────────────────────
+
+let allRuns = [];
+let weeksFilter = 0; // 0 = show all
+
+function filterByWeeks(runs, weeks) {
+  if (!weeks) return runs;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - weeks * 7);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  return runs.filter(r => r.date >= cutoffStr);
+}
+
+function applyFilterAndRender() {
+  renderCharts(filterByWeeks(allRuns, weeksFilter));
+}
+
+function initWeekFilter() {
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      weeksFilter = Number(btn.dataset.weeks);
+      applyFilterAndRender();
+    });
+  });
+}
+
 // ── Charts ────────────────────────────────────────────────────────────────────
 
 let charts = {};
@@ -129,15 +213,43 @@ function destroyCharts() {
 function renderCharts(runs) {
   destroyCharts();
 
-  const withPace = runs.filter(r => r.paceMinPerKm != null);
-  const withHr   = runs.filter(r => r.avgHr != null);
-  const withRei  = runs.filter(r => r.rei != null);
+  const weeks = groupByWeek(runs);
+
+  const withPace    = weeks.filter(w => w.paceMinPerKm != null);
+  const withHr      = weeks.filter(w => w.avgHr != null);
+  const withRei     = weeks.filter(w => w.rei != null);
+  const withMileage = weeks.filter(w => w.totalKm > 0);
+
+  charts.mileage = new Chart(document.getElementById('mileageChart'), {
+    type: 'bar',
+    data: {
+      labels: withMileage.map(w => w.label),
+      datasets: [{
+        data: withMileage.map(w => parseFloat(w.totalKm.toFixed(2))),
+        backgroundColor: '#f5a623',
+        borderRadius: 3,
+        borderSkipped: false,
+      }],
+    },
+    options: {
+      ...baseOptions({ beginAtZero: true }),
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.raw.toFixed(1)} km`,
+            title: ctx => `Week of ${withMileage[ctx[0].dataIndex].rangeLabel}`,
+          },
+        },
+      },
+    },
+  });
 
   charts.pace = new Chart(document.getElementById('paceChart'), {
     type: 'line',
     data: {
-      labels: withPace.map(r => dateLabel(r.date)),
-      datasets: [lineDataset(withPace.map(r => r.paceMinPerKm), '#5b9cf6')],
+      labels: withPace.map(w => w.label),
+      datasets: [lineDataset(withPace.map(w => w.paceMinPerKm), '#5b9cf6')],
     },
     options: {
       ...baseOptions({
@@ -149,7 +261,7 @@ function renderCharts(runs) {
         tooltip: {
           callbacks: {
             label: ctx => ` ${fmtPace(ctx.raw)} / km`,
-            title: ctx => withPace[ctx[0].dataIndex]?.name || ctx[0].label,
+            title: ctx => `Week of ${withPace[ctx[0].dataIndex].rangeLabel}`,
           },
         },
       },
@@ -159,8 +271,8 @@ function renderCharts(runs) {
   charts.hr = new Chart(document.getElementById('hrChart'), {
     type: 'line',
     data: {
-      labels: withHr.map(r => dateLabel(r.date)),
-      datasets: [lineDataset(withHr.map(r => r.avgHr), '#f06e6e')],
+      labels: withHr.map(w => w.label),
+      datasets: [lineDataset(withHr.map(w => w.avgHr), '#f06e6e')],
     },
     options: {
       ...baseOptions(),
@@ -168,8 +280,8 @@ function renderCharts(runs) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: ctx => ` ${ctx.raw} bpm`,
-            title: ctx => withHr[ctx[0].dataIndex]?.name || ctx[0].label,
+            label: ctx => ` ${Math.round(ctx.raw)} bpm avg`,
+            title: ctx => `Week of ${withHr[ctx[0].dataIndex].rangeLabel}`,
           },
         },
       },
@@ -179,8 +291,8 @@ function renderCharts(runs) {
   charts.rei = new Chart(document.getElementById('reiChart'), {
     type: 'line',
     data: {
-      labels: withRei.map(r => dateLabel(r.date)),
-      datasets: [lineDataset(withRei.map(r => r.rei), '#5ecb7e')],
+      labels: withRei.map(w => w.label),
+      datasets: [lineDataset(withRei.map(w => w.rei), '#5ecb7e')],
     },
     options: {
       ...baseOptions({
@@ -190,8 +302,8 @@ function renderCharts(runs) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: ctx => ` REI ${ctx.raw.toFixed(3)}`,
-            title: ctx => withRei[ctx[0].dataIndex]?.name || ctx[0].label,
+            label: ctx => ` REI ${ctx.raw.toFixed(3)} avg`,
+            title: ctx => `Week of ${withRei[ctx[0].dataIndex].rangeLabel}`,
           },
         },
       },
@@ -226,8 +338,9 @@ async function handleRefresh() {
 
     const runs = data.runs || [];
     if (runs.length) {
+      allRuns = runs;
       document.getElementById('charts').hidden = false;
-      renderCharts(runs);
+      applyFilterAndRender();
     }
   } catch {
     setStatus('Refresh failed. Please try again.');
@@ -260,9 +373,10 @@ async function handleResync() {
 
     const runs = data.runs || [];
     if (runs.length) {
+      allRuns = runs;
       document.getElementById('charts').hidden = false;
       document.getElementById('empty-state').hidden = true;
-      renderCharts(runs);
+      applyFilterAndRender();
     }
   } catch {
     setStatus('Resync failed. Please try again.');
@@ -331,11 +445,13 @@ async function init() {
       return;
     }
 
+    allRuns = runs;
     document.getElementById('charts').hidden = false;
-    renderCharts(runs);
+    applyFilterAndRender();
   } catch {
     setStatus('Failed to load data. Please refresh the page.');
   }
 }
 
 init();
+initWeekFilter();

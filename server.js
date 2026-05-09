@@ -52,6 +52,10 @@ async function getLastRun() {
 // Returns the number of newly inserted (upserted) runs.
 async function saveRuns(runs) {
   if (!runs.length) return 0;
+
+  // Purge any Fitbit-only runs — only matched runs are kept.
+  await db.collection('runs').deleteMany({ stravaId: { $exists: false } });
+
   const ops = runs.map(run => ({
     updateOne: {
       filter: run.stravaId != null
@@ -254,6 +258,11 @@ async function fetchFitbitRuns(token, afterDateStr = '2025-12-31') {
 // Fitbit returns times with the correct Dubai offset (+04:00).
 // Subtract the Dubai offset from manual Strava timestamps before comparing.
 const DUBAI_OFFSET_MS = 4 * 60 * 60 * 1000; // UTC+4, no DST
+const DEDUP_WINDOW_MS = 5 * 60 * 60 * 1000; // 5-hour dedup window
+
+function dubaiDateStr(utcMs) {
+  return new Date(utcMs + DUBAI_OFFSET_MS).toISOString().slice(0, 10);
+}
 
 function stravaUtcMs(activity) {
   const raw = new Date(activity.start_date).getTime();
@@ -288,7 +297,9 @@ function mergeRuns(stravaRuns, fitbitRuns) {
     for (let i = 0; i < fitbitRuns.length; i++) {
       if (usedFitbit.has(i)) continue;
       const fb = fitbitRuns[i];
-      if (Math.abs(stravaTime - fitbitUtcMs(fb.startTime)) <= 30 * 60 * 1000) {
+      const fbTime = fitbitUtcMs(fb.startTime);
+      if (Math.abs(stravaTime - fbTime) <= DEDUP_WINDOW_MS &&
+          dubaiDateStr(stravaTime) === dubaiDateStr(fbTime)) {
         fitbitMatch = fb;
         usedFitbit.add(i);
         break;
@@ -317,31 +328,6 @@ function mergeRuns(stravaRuns, fitbitRuns) {
       name: strava.name,
       distanceKm: strava.distance / 1000,
       durationMin: strava.moving_time / 60,
-      speedMperMin,
-      paceMinPerKm,
-      avgHr,
-      rei,
-    });
-  }
-
-  // Fitbit-only runs
-  for (let i = 0; i < fitbitRuns.length; i++) {
-    if (usedFitbit.has(i)) continue;
-    const fb = fitbitRuns[i];
-    const distanceM = toMeters(fb);
-    const durationMin = (fb.duration || 0) / 60000;
-    const speedMperMin = durationMin > 0 && distanceM > 0 ? distanceM / durationMin : null;
-    const paceMinPerKm = distanceM > 0 && durationMin > 0 ? durationMin / (distanceM / 1000) : null;
-    const avgHr = fb.averageHeartRate || null;
-    const rei = speedMperMin && avgHr ? speedMperMin / avgHr : null;
-
-    result.push({
-      fitbitLogId: fb.logId,
-      date: fb.startTime,
-      source: 'fitbit',
-      name: fb.activityName,
-      distanceKm: distanceM / 1000,
-      durationMin,
       speedMperMin,
       paceMinPerKm,
       avgHr,

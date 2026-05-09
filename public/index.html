@@ -17,6 +17,18 @@
     <div id="status-bar"></div>
 
     <main id="charts" hidden>
+      <div id="week-filter">
+        <span class="filter-label">Show</span>
+        <button class="filter-btn" data-weeks="4">4w</button>
+        <button class="filter-btn" data-weeks="8">8w</button>
+        <button class="filter-btn" data-weeks="12">12w</button>
+        <button class="filter-btn" data-weeks="26">26w</button>
+        <button class="filter-btn active" data-weeks="0">All</button>
+      </div>
+      <section class="chart-block">
+        <div class="chart-label">Weekly Mileage <span class="unit">km</span></div>
+        <canvas id="mileageChart"></canvas>
+      </section>
       <section class="chart-block">
         <div class="chart-label">Pace <span class="unit">min / km</span></div>
         <canvas id="paceChart"></canvas>
